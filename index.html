@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Mengurutkan TXT & Konversi ke PDF</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #ffffff;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+      font-size: 14px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 20px auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      border: 1px solid #eee;
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 20px;
+      font-weight: 500;
+      text-align: center;
+      color: #333;
+    }
+    textarea {
+      width: 100%;
+      height: 200px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      resize: vertical;
+      background: #fafafa;
+    }
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 15px 0;
+      justify-content: center;
+    }
+    input[type="file"], button {
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ccc;
+      padding: 0.4rem 0.8rem;
+      font-size: 13px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    input[type="file"]:hover, button:hover {
+      background: #e0e0e0;
+    }
+    pre {
+      background: #fafafa;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      padding: 10px;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Mengurutkan TXT -->
+<div class="container">
+  <h2>Mengurutkan TXT</h2>
+  <div class="buttons">
+    <input type="file" id="fileInputSort" accept=".txt">
+    <button onclick="downloadHasil()">Download Txt</button>
+  </div>
+  <textarea id="inputSort" placeholder="Tempelkan data di sini..." oninput="urutkanOtomatis()"></textarea>
+  <h3>Hasil Terurut:</h3>
+  <pre id="outputSort"></pre>
+</div>
+
+<!-- Konversi ke PDF -->
+<div class="container">
+  <h2>Konversi TXT ke PDF</h2>
+  <div class="buttons">
+    <button onclick="convertToPDF()">Export ke PDF</button>
+  </div>
+  <textarea id="textAreaPDF" placeholder="Isi untuk PDF akan muncul di sini..."></textarea>
+</div>
+
+<script>
+  // Urutkan TXT
+  document.getElementById('fileInputSort').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file && file.type === "text/plain") {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('inputSort').value = e.target.result;
+        urutkanOtomatis();
+      };
+      reader.readAsText(file);
+    } else {
+      alert("Silakan pilih file .txt");
+    }
+  });
+
+  function urutkanOtomatis() {
+    const input = document.getElementById('inputSort').value.trim();
+    const blocks = input.split(/\n\s*\n/).filter(Boolean);
+
+    blocks.sort((a, b) => {
+      const numA = parseInt((a.match(/#.*?(\d+)/) || [,"0"])[1], 10);
+      const numB = parseInt((b.match(/#.*?(\d+)/) || [,"0"])[1], 10);
+      return numA - numB;
+    });
+
+    const hasil = blocks.join('\n\n');
+    document.getElementById('outputSort').textContent = hasil;
+    document.getElementById('textAreaPDF').value = hasil;
+  }
+
+  function downloadHasil() {
+    const text = document.getElementById('outputSort').textContent;
+    const blob = new Blob([text], { type: "text/plain" });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'hasil_terurut.txt';
+    link.click();
+  }
+
+  // Konversi ke PDF
+  async function convertToPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+
+    const margin = 40;
+    const pageHeight = doc.internal.pageSize.height;
+    const lineHeight = 16;
+    const blockSpacing = 16;
+    let y = margin;
+    let pageNumber = 1;
+
+    const text = document.getElementById("textAreaPDF").value;
+    const blocks = text.split(/\n(?=# )/g);
+
+    const addHeader = () => {
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text("Laporan TXT ke PDF", margin, 30);
+      doc.setFontSize(10);
+      doc.text(`Halaman ${pageNumber}`, doc.internal.pageSize.width - margin, 30, { align: "right" });
+      doc.setDrawColor(150);
+      doc.line(margin, 36, doc.internal.pageSize.width - margin, 36);
+      y = 50;
+      doc.setFont("Times", "normal");
+      doc.setFontSize(11);
+    };
+
+    addHeader();
+
+    for (const block of blocks) {
+      const lines = doc.splitTextToSize(block, doc.internal.pageSize.width - 2 * margin);
+
+      if (y + lines.length * lineHeight > pageHeight - margin) {
+        doc.addPage();
+        pageNumber++;
+        addHeader();
+      }
+
+      for (const line of lines) {
+        doc.text(line, margin, y);
+        y += lineHeight;
+        if (y > pageHeight - margin) {
+          doc.addPage();
+          pageNumber++;
+          addHeader();
+        }
+      }
+
+      y += 6;
+      doc.setDrawColor(200);
+      doc.line(margin, y, doc.internal.pageSize.width - margin, y);
+      y += blockSpacing;
+    }
+
+    doc.save("hasil_desain_bagus.pdf");
+  }
+</script>
+
+</body>
+</html>
